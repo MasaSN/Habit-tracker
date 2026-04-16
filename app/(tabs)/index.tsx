@@ -1,98 +1,172 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
+import { useState, useCallback } from "react";
+import { db, auth } from "../../firebaseConfig";
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { router, useFocusEffect } from "expo-router";
+import { signOut } from "firebase/auth";
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [habits, setHabits] = useState<any[]>([]);
+  const today = new Date().toISOString().split("T")[0];
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const loadHabits = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const snapshot = await getDocs(
+        collection(db, "users", user.uid, "habits"),
+      );
+      const loaded = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setHabits(loaded);
+    } catch (error) {
+      console.log("Error loading habits", error);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHabits();
+    }, []),
+  );
+
+  const logout = async () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await signOut(auth);
+          router.replace("/login" as any);
+        },
+      },
+    ]);
+  };
+
+  const toggleHabit = async (id: string, completedDates: string[]) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const alreadyDone = completedDates.includes(today);
+      const updated = alreadyDone
+        ? completedDates.filter((d) => d !== today)
+        : [...completedDates, today];
+      const ref = doc(db, "users", user.uid, "habits", id);
+      await updateDoc(ref, { completedDates: updated });
+      loadHabits();
+    } catch (error) {
+      console.log("Error toggling habit", error);
+    }
+  };
+
+  const deleteHabit = async (id: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      await deleteDoc(doc(db, "users", user.uid, "habits", id));
+      loadHabits();
+    } catch (error) {
+      console.log("Error deleting habit", error);
+    }
+  };
+
+  const renderHabit = ({ item }: any) => {
+    const done = item.completedDates.includes(today);
+    return (
+      <View style={styles.habitCard}>
+        <TouchableOpacity
+          style={styles.habitLeft}
+          onPress={() => toggleHabit(item.id, item.completedDates)}
+        >
+          <View style={[styles.checkbox, done && styles.checkboxDone]}>
+            {done && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+          <Text style={[styles.habitName, done && styles.habitNameDone]}>
+            {item.name}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => deleteHabit(item.id)}>
+          <Text style={styles.delete}>🗑️</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Today&apos;s Habits</Text>
+          <Text style={styles.date}>{new Date().toDateString()}</Text>
+        </View>
+        <TouchableOpacity onPress={logout}>
+          <Text style={styles.logoutBtn}>🚪 Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      {habits.length === 0 ? (
+        <Text style={styles.empty}>No habits yet! Go add some ✨</Text>
+      ) : (
+        <FlatList
+          data={habits}
+          keyExtractor={(item: any) => item.id}
+          renderItem={renderHabit}
+          contentContainerStyle={{ paddingBottom: 40 }}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 60,
+    marginBottom: 24,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: { fontSize: 28, fontWeight: "bold" },
+  date: { fontSize: 14, color: "#999" },
+  empty: { textAlign: "center", marginTop: 80, fontSize: 16, color: "#aaa" },
+  habitCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#f9f9f9",
+    marginBottom: 12,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  habitLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#6C63FF",
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  checkboxDone: { backgroundColor: "#6C63FF" },
+  checkmark: { color: "#fff", fontWeight: "bold" },
+  habitName: { fontSize: 16, color: "#333" },
+  habitNameDone: { textDecorationLine: "line-through", color: "#aaa" },
+  delete: { fontSize: 20 },
+  logoutBtn: { fontSize: 14, color: "#ff4444" },
 });
