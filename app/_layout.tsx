@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Stack, router } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebaseConfig";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { useEffect, useState } from 'react';
+import { Stack, router } from 'expo-router';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebaseConfig';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { ThemeProvider } from '../context/ThemeContext';
 
 export default function RootLayout() {
   const [loading, setLoading] = useState(true);
@@ -10,9 +11,9 @@ export default function RootLayout() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        router.replace("/(tabs)" as any);
+        router.replace('/(tabs)' as any);
       } else {
-        router.replace("/login" as any);
+        router.replace('/login' as any);
       }
       setLoading(false);
     });
@@ -20,14 +21,16 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Stack screenOptions={{ headerShown: false }} />
-      {loading && (
-        <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="#6C63FF" />
-        </View>
-      )}
-    </View>
+    <ThemeProvider>
+      <View style={styles.container}>
+        <Stack screenOptions={{ headerShown: false }} />
+        {loading && (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color="#6C63FF" />
+          </View>
+        )}
+      </View>
+    </ThemeProvider>
   );
 }
 
@@ -35,8 +38,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

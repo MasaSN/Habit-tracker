@@ -11,9 +11,11 @@ import {
 import { useState } from "react";
 import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function AddScreen() {
   const [habitName, setHabitName] = useState("");
+  const { bg, cardBg, textColor, subColor } = useTheme();
 
   const saveHabit = async () => {
     if (habitName.trim() === "") {
@@ -40,12 +42,13 @@ export default function AddScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Add a Habit</Text>
+      <View style={[styles.container, { backgroundColor: bg }]}>
+        <Text style={[styles.title, { color: textColor }]}>Add a Habit</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: cardBg, backgroundColor: cardBg, color: textColor }]}
           placeholder="e.g. Drink water, Read 10 pages..."
+          placeholderTextColor={subColor}
           value={habitName}
           onChangeText={setHabitName}
         />

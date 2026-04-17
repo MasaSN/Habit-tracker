@@ -17,10 +17,15 @@ import {
 } from "firebase/firestore";
 import { router, useFocusEffect } from "expo-router";
 import { signOut } from "firebase/auth";
+import { useTheme } from "../../context/ThemeContext";
+import ConfettiCannon from "react-native-confetti-cannon";
+import { useRef } from "react";
 
 export default function HomeScreen() {
   const [habits, setHabits] = useState<any[]>([]);
   const today = new Date().toISOString().split("T")[0];
+  const { bg, cardBg, textColor, subColor } = useTheme();
+  const confettiRef = useRef<any>(null);
 
   const loadHabits = async () => {
     try {
@@ -64,9 +69,21 @@ export default function HomeScreen() {
       const updated = alreadyDone
         ? completedDates.filter((d) => d !== today)
         : [...completedDates, today];
+
       const ref = doc(db, "users", user.uid, "habits", id);
       await updateDoc(ref, { completedDates: updated });
-      loadHabits();
+      await loadHabits();
+
+      // Fire confetti if all habits are done
+      if (!alreadyDone) {
+        const updatedHabits = habits.map((h) =>
+          h.id === id ? { ...h, completedDates: updated } : h,
+        );
+        const allDone = updatedHabits.every((h) =>
+          h.completedDates.includes(today),
+        );
+        if (allDone) confettiRef.current?.start();
+      }
     } catch (error) {
       console.log("Error toggling habit", error);
     }
@@ -86,7 +103,7 @@ export default function HomeScreen() {
   const renderHabit = ({ item }: any) => {
     const done = item.completedDates.includes(today);
     return (
-      <View style={styles.habitCard}>
+      <View style={[styles.habitCard, { backgroundColor: cardBg }]}>
         <TouchableOpacity
           style={styles.habitLeft}
           onPress={() => toggleHabit(item.id, item.completedDates)}
@@ -106,17 +123,38 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bg }]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Today&apos;s Habits</Text>
-          <Text style={styles.date}>{new Date().toDateString()}</Text>
+          <Text style={[styles.title, { color: textColor }]}>
+            Today&apos;s Habits
+          </Text>
+          <Text style={[styles.date, { color: subColor }]}>
+            {new Date().toDateString()}
+          </Text>
         </View>
         <TouchableOpacity onPress={logout}>
           <Text style={styles.logoutBtn}>🚪 Logout</Text>
         </TouchableOpacity>
       </View>
-
+      {habits.length > 0 && (
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            {habits.filter((h) => h.completedDates.includes(today)).length}/
+            {habits.length} completed today
+          </Text>
+          <View style={styles.progressBarBg}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${(habits.filter((h) => h.completedDates.includes(today)).length / habits.length) * 100}%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      )}
       {habits.length === 0 ? (
         <Text style={styles.empty}>No habits yet! Go add some ✨</Text>
       ) : (
@@ -127,6 +165,14 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
+      <ConfettiCannon
+        ref={confettiRef}
+        count={150}
+        origin={{ x: 200, y: 0 }}
+        autoStart={false}
+        fadeOut={true}
+        colors={["#6C63FF", "#FF6584", "#43D9AD", "#FFD166"]}
+      />
     </View>
   );
 }
@@ -169,4 +215,8 @@ const styles = StyleSheet.create({
   habitNameDone: { textDecorationLine: "line-through", color: "#aaa" },
   delete: { fontSize: 20 },
   logoutBtn: { fontSize: 14, color: "#ff4444" },
+  progressContainer: { marginBottom: 20 },
+  progressText: { fontSize: 14, color: "#666", marginBottom: 8 },
+  progressBarBg: { height: 10, backgroundColor: "#eee", borderRadius: 10 },
+  progressBarFill: { height: 10, backgroundColor: "#6C63FF", borderRadius: 10 },
 });
